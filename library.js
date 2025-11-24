@@ -1,7 +1,7 @@
 // Документация: https://chimildic.github.io/goofy
 // Телеграм: https://t.me/forum_goofy
 // Форум: https://github.com/Chimildic/goofy/discussions
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const UserProperties = PropertiesService.getUserProperties();
 const KeyValue = UserProperties.getProperties();
 const API_BASE_URL = 'https://api.spotify.com/v1';
@@ -3570,27 +3570,14 @@ const Cache = (function () {
     function read(filepath) {
         let content = Storage.getContent(filepath);
         if (!content) {
-            content = withFileLock(filepath, getContentFromFile);
+            content = getContentFromFile();
             Storage.setContent(filepath, content);
         }
         return Selector.sliceCopy(content);
+    }
 
-        function getContentFromFile(attempt = 0) {
-            if (attempt == 3)
-                throw new Error(`Неизвестная ошибка при чтении файла ${filepath}`);
-            let file = findFile(filepath);
-            let ext = obtainFileExtension(filepath);
-            if (!file) {
-                return ext == 'json' ? [] : '';
-            }
-            let str = tryGetBlobAsString(file);
-            if (str.length == 0) {
-                Admin.printInfo('Пустая строка из blob-объекта');
-                Admin.pause(2);
-                return getContentFromFile(++attempt)
-            }
-            return ext == 'json' ? JSON.parseFromString(str) : str;
-        }
+    function writeWithLock(filepath, content) {
+        return withFileLock(filepath, write, arguments)
     }
 
     function write(filepath, content) {
@@ -3616,33 +3603,31 @@ const Cache = (function () {
 
     function append(filepath, content, place = 'end', limit = 400000) {
         if (!content || content.length == 0) return;
-        let currentContent = read(filepath);
-        let ext = obtainFileExtension(filepath);
-        return ext == 'json' ? appendJSON() : appendString();
+        return withFileLock(filepath, () => {
+            let currentContent = getContentFromFile()
+            let ext = obtainFileExtension(filepath);
+            return ext == 'json' ? appendJSON() : appendString();
 
-        function appendJSON() {
-            return place == 'begin'
-                ? appendNewData(content, currentContent)
-                : appendNewData(currentContent, content);
+            function appendJSON() {
+                return place == 'begin'
+                    ? appendNewData(content, currentContent)
+                    : appendNewData(currentContent, content);
 
-            function appendNewData(xData, yData) {
-                let allData = [];
-                Combiner.push(allData, xData, yData);
-                Selector.keepFirst(allData, limit);
-                writeWithLock(filepath, allData);
-                return allData.length;
+                function appendNewData(xData, yData) {
+                    let allData = [];
+                    Combiner.push(allData, xData, yData);
+                    Selector.keepFirst(allData, limit);
+                    write(filepath, allData);
+                    return allData.length;
+                }
             }
-        }
 
-        function appendString() {
-            let raw = place == 'begin' ? (content + currentContent) : (currentContent + content);
-            writeWithLock(filepath, raw);
-            return raw.length;
-        }
-    }
-
-    function writeWithLock(filepath, content) {
-        return withFileLock(filepath, write, arguments)
+            function appendString() {
+                let raw = place == 'begin' ? (content + currentContent) : (currentContent + content);
+                write(filepath, raw);
+                return raw.length;
+            }
+        }, arguments)
     }
 
     function withFileLock(filename, targetFunction, args) {
@@ -3822,6 +3807,23 @@ const Cache = (function () {
     function obtainFileExtension(filename) {
         let ext = filename.split('.');
         return ext.length == 2 ? ext[1] : 'json';
+    }
+
+    function getContentFromFile(attempt = 0) {
+        if (attempt == 3)
+            throw new Error(`Неизвестная ошибка при чтении файла ${filepath}`);
+        let file = findFile(filepath);
+        let ext = obtainFileExtension(filepath);
+        if (!file) {
+            return ext == 'json' ? [] : '';
+        }
+        let str = tryGetBlobAsString(file);
+        if (str.length == 0) {
+            Admin.printInfo('Пустая строка из blob-объекта');
+            Admin.pause(2);
+            return getContentFromFile(++attempt)
+        }
+        return ext == 'json' ? JSON.parseFromString(str) : str;
     }
 
     function tryGetBlobAsString(file) {
