@@ -3570,7 +3570,7 @@ const Cache = (function () {
     function read(filepath) {
         let content = Storage.getContent(filepath);
         if (!content) {
-            content = getContentFromFile();
+            content = getContentFromFile(filepath);
             Storage.setContent(filepath, content);
         }
         return Selector.sliceCopy(content);
@@ -3604,7 +3604,7 @@ const Cache = (function () {
     function append(filepath, content, place = 'end', limit = 400000) {
         if (!content || content.length == 0) return;
         return withFileLock(filepath, () => {
-            let currentContent = getContentFromFile()
+            let currentContent = getContentFromFile(filepath)
             let ext = obtainFileExtension(filepath);
             return ext == 'json' ? appendJSON() : appendString();
 
@@ -3809,7 +3809,7 @@ const Cache = (function () {
         return ext.length == 2 ? ext[1] : 'json';
     }
 
-    function getContentFromFile(attempt = 0) {
+    function getContentFromFile(filepath, attempt = 0) {
         if (attempt == 3)
             throw new Error(`Неизвестная ошибка при чтении файла ${filepath}`);
         let file = findFile(filepath);
@@ -3821,7 +3821,7 @@ const Cache = (function () {
         if (str.length == 0) {
             Admin.printInfo('Пустая строка из blob-объекта');
             Admin.pause(2);
-            return getContentFromFile(++attempt)
+            return getContentFromFile(filepath, ++attempt)
         }
         return ext == 'json' ? JSON.parseFromString(str) : str;
     }
