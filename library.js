@@ -1,7 +1,7 @@
 // Документация: https://chimildic.github.io/goofy
 // Телеграм: https://t.me/forum_goofy
 // Форум: https://github.com/Chimildic/goofy/discussions
-const VERSION = '2.4.0';
+const VERSION = '2.4.1';
 const UserProperties = PropertiesService.getUserProperties();
 const KeyValue = UserProperties.getProperties();
 const API_BASE_URL = 'https://api.spotify.com/v1';
@@ -301,6 +301,7 @@ const Audiolist = (function () {
             artist: item.artist?.["#text"] || item.artist?.name || '',
             album: item.album?.["#text"] || '',
             name: item.name || '',
+            coverUrl: item.image?.[item.image.length - 1]["#text"] || '',
             dateAt: parseInt(item.date?.uts) * 1000 || 0,
         }))
     }
@@ -1524,20 +1525,20 @@ const Filter = (function () {
         match(items, strRegex, true);
     }
 
+
     function match(items, strRegex, invert = false) {
-        let regex = new RegExp(strRegex, 'i');
+        const regex = new RegExp(strRegex, 'i');
+        const test = (str) => str && regex.test(str.formatName());
+        const testArtists = (list) => list && list.length > 0 && list.every(a => test(a.name));
+
         let filteredTracks = items.filter((item) => {
-            if (typeof item == 'undefined') {
-                return false;
-            } else if (item.hasOwnProperty('album') && item.hasOwnProperty('artists')) {
-                return invert ^ (
-                    regex.test(item.name.formatName()) ||
-                    regex.test(item.album.name.formatName()) ||
-                    item.artists.every(a => regex.test(a.name.formatName())) ||
-                    (item.album.artists && item.album.artists.every(a => regex.test(a.name.formatName())))
-                );
-            }
-            return invert ^ regex.test(item.name.formatName());
+            if (!item) return false;
+            let isMatch =
+                test(item.name) ||
+                test(item.album?.name) ||
+                testArtists(item.artists) ||
+                testArtists(item.album?.artists);
+            return invert ^ isMatch;
         });
         Combiner.replace(items, filteredTracks);
     }
