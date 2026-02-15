@@ -2039,7 +2039,7 @@ const Order = (function () {
         }
 
         function compareNumber(x, y) {
-            if (!Number.parseFloat(x[_key]) || !Number.parseFloat(y[_key])) return 0;
+            if (isNaN(x[_key]) || isNaN(y[_key])) return 0;
             return _direction == 'asc' ? x[_key] - y[_key] : y[_key] - x[_key];
         }
 
