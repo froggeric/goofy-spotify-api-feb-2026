@@ -6,6 +6,29 @@ To add your own functions or override existing ones, use the [instructions](http
 
 [Copy the updated code](https://script.google.com/d/1DnC4H7yjqPV2unMZ_nmB-1bDSJT9wQUJ7Wq-ijF4Nc7Fl3qnbT0FkPSr/edit?usp=sharing).
 
+### Version 2.5.0 - Spotify API February 2026 Migration
+
+**Breaking Changes:**
+- Spotify removed country detection from `/me` endpoint. **`USER_MARKET` is now required** in config. [Configure it](/config) with your market code (e.g., `US`, `RU`, `GB`).
+- Spotify introduced Development Mode with strict limitations: 1 Client ID per developer, Premium subscription required for quota extension. See [installation guide](/install) for details.
+- `Source.getListCategory()` - **REMOVED** - Spotify deprecated the browse categories endpoint. Use `Source.mineTracks()` to search playlists by keywords.
+- `Source.getCategoryTracks()` - **REMOVED** - Spotify deprecated category playlists endpoint. Use `Source.mineTracks()` with genre keywords as alternative.
+- `Source.getArtistsTopTracks()` - Now uses graceful fallback (Last.fm top tracks + Spotify Recommendations). Results may differ from previous behavior.
+
+**Deprecated Features:**
+- `popularity` filter in `Source.getArtistsTracks()` - Spotify no longer provides accurate popularity data for filtering. Use `min_popularity` in `Source.getRecomTracks()` recommendations as alternative.
+- `followers` filter in `Source.getArtistsTracks()` - No longer supported by Spotify API.
+
+**Recommendations:**
+- Apply for **Extended Quota Mode** in Spotify Dashboard for full functionality (recommendations, search, etc.)
+- Consider using Last.fm integration as fallback for artist recommendations and top tracks
+- Use `Source.getRecomTracks()` with `seed_genres` for genre-based recommendations instead of category browsing
+
+**Migration Required:**
+- Add `USER_MARKET` to your `config.gs` file (required for market-aware operations)
+- Review scripts using `getListCategory()` or `getCategoryTracks()` and migrate to alternatives
+- If using `popularity` or `followers` filters, remove or replace them
+
 ### Version 2.0.4
 - Perform the [migration](/migrate2.md)
 - Added function [getRecomArtists](/reference/source?id=getrecomartists) as a replacement for errors from [getRelatedArtists](/reference/source?id=getrelatedartists) after Spotify's updated policy

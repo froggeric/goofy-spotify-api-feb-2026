@@ -1,8 +1,30 @@
 # Установка
 
-Вы создаете собственную копию библиотеки. Только вы имеете доступ ко всему, что происходит в этой копии. 
+Вы создаете собственную копию библиотеки. Только вы имеете доступ ко всему, что происходит в этой копии.
 
-Выполняется один раз. 
+Выполняется один раз.
+
+?> **Изменения Spotify API (февраль 2026)** - Spotify ввел Development Mode со значительными ограничениями. Для полной функциональности следует подать заявку на Extended Quota Mode. Подробности ниже.
+
+## Development Mode против Extended Quota Mode
+
+Spotify теперь работает в двух режимах для сторонних приложений:
+
+| Возможность | Development Mode | Extended Quota Mode |
+|-------------|-----------------|---------------------|
+| Client IDs | 1 на разработчика | Несколько |
+| Требуется Premium | Нет | Да (требуется для заявки) |
+| Квота запросов | Ограничена | Расширена |
+| API рекомендаций | Ограничено/Недоступно | Полный доступ |
+| API поиска | Ограничен | Полный доступ |
+
+**Рекомендация:** Подайте заявку на Extended Quota Mode для полной функциональности библиотеки:
+1. Перейдите в [Spotify Dashboard](https://developer.spotify.com/dashboard/)
+2. Выберите ваше приложение
+3. Перейдите в Настройки
+4. Запросите Extended Quota Mode (требуется Spotify Premium)
+
+## Пошаговая установка
 
 1. Перейдите в [Spotify Dashboard](https://developer.spotify.com/dashboard/) и нажмите `Log in`.
 
@@ -24,10 +46,12 @@
 
    ![Client ID и Client Secret](/img/install-step-client-id2.png)
 
-6. Также укажите значения для `PRIVATE_CLIENT_ID` и `PRIVATE_CLIENT_SECRET` получив их [здесь](https://script.google.com/macros/s/AKfycbwwDT25i71nYAk1aICxnrXfFVDzctcmhRMqzugjEkpqmUWjGATAbMOCL5aqvlPXOIq4/exec). 
+6. Также укажите значения для `PRIVATE_CLIENT_ID` и `PRIVATE_CLIENT_SECRET` получив их [здесь](https://script.google.com/macros/s/AKfycbwwDT25i71nYAk1aICxnrXfFVDzctcmhRMqzugjEkpqmUWjGATAbMOCL5aqvlPXOIq4/exec).
    Если приватные ключи недоступны, скопируйте свои обычные `CLIENT_ID` и `CLIENT_SECRET`. В этом случае недоступны рекомендации от Spotify из-за их обновленных правил.
    Если рекомендации важны, попросите увеличить лимит в [телеграм чате](https://t.me/forum_goofy).
- 
+
+   **Важно:** Установите `USER_MARKET` на код вашего рынка Spotify (например, `US`, `RU`, `GB`). Это обязательно, так как Spotify удалил определение страны из эндпоинта `/me` в феврале 2026. Без этого некоторые функции могут завершаться с ошибкой или возвращать некорректные результаты.
+
    Сохраните изменение <kbd>Ctrl</kbd><kbd>S</kbd> или иконка дискеты на панели действий
 
 7. Запустите в редакторе выполнение функции `setProperties`. 

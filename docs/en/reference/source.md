@@ -124,6 +124,8 @@ let albums = Source.getArtistsAlbums(artist, {
 
 ### getArtistsTopTracks
 
+?> **MODIFIED** - This function was affected by Spotify's February 2026 API changes. It now uses a graceful fallback: Last.fm top tracks + Spotify Recommendations when direct API access is unavailable. Results may differ from previous behavior.
+
 Returns an artist's top tracks as an array. Up to 10 tracks per artist.
 
 Arguments
@@ -145,6 +147,8 @@ tracks[1][0]; // first track of second artist
 ```
 
 ### getArtistsTracks
+
+?> **DEPRECATED FILTERS** - The `popularity` and `followers` filters were affected by Spotify's February 2026 API changes. Spotify no longer provides accurate data for these filters. Use `min_popularity` in `Source.getRecomTracks()` as an alternative for popularity-based filtering.
 
 Returns an array of artist tracks according to the specified `params`.
 
@@ -250,6 +254,12 @@ let tracks = Source.getArtistsTracks({
 
 ### getCategoryTracks
 
+?> **DEPRECATED** - This function was affected by Spotify's February 2026 API changes. The browse categories endpoint has been removed.
+
+**Alternatives:**
+- Use `Source.mineTracks()` to search playlists by keyword
+- Use `Source.getRecomTracks()` with `seed_genres` for genre-based recommendations
+
 Returns an array of tracks from playlists in the specified category. Playlists are sorted by popularity. [List of categories](/reference/desc?id=Playlist-Categories).
 
 Arguments
@@ -334,6 +344,12 @@ let tracks = Source.getFollowedTracks({
 
 
 ### getListCategory
+
+?> **DEPRECATED** - This function was affected by Spotify's February 2026 API changes. The browse categories endpoint has been removed.
+
+**Alternatives:**
+- Use `Source.mineTracks()` to search playlists by keyword
+- Use `Source.getRecomTracks()` with `seed_genres` for genre-based recommendations
 
 Returns an array of categories available for [getCategoryTracks](/reference/source?id=getcategorytracks).
 

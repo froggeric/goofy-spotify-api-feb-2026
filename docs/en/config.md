@@ -5,6 +5,13 @@ Description of parameters from the `config` file
 ## API
 - `CLIENT_ID` and `CLIENT_SECRET` (string) - keys for accessing Spotify Web API. Created during [first installation](/install).
 
+- `USER_MARKET` (string) - **REQUIRED since February 2026**. Your Spotify market/region code (e.g., `US`, `RU`, `GB`, `DE`). Spotify removed country detection from the `/me` endpoint, so this must be configured manually. Used for:
+  - Filtering unavailable tracks with `Filter.removeUnavailable()`
+  - Market-aware album and track searches
+  - Ensuring content availability in your region
+  
+  !> Without `USER_MARKET`, some functions may return incorrect results or fail.
+
 - `LASTFM_API_KEY` (string) - key for working with Last.fm API. Created [additionally](/tuning?id=Lastfm-setup).
 
 - `MUSIXMATCH_API_KEY` (string) - key from the musixmatch service for the [detectLanguage](/reference/filter?id=detectlanguage) function. Created [additionally](/tuning?id=Musicmatch-setup).

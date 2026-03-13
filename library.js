@@ -512,15 +512,19 @@ const Source = (function () {
     }
 
     function getListCategory(params = {}) {
-        let query = CustomUrlFetchApp.parseQuery(params);
-        let url = `${API_BASE_URL}/browse/categories?${query}`;
-        return SpotifyRequest.get(url).items;
+        throw new Error(
+            'DEPRECATED: Source.getListCategory() is no longer available.\n' +
+            'Spotify removed the /browse/categories endpoint in February 2026.\n' +
+            'Alternative: Use Source.mineTracks({ keyword: ["genre"], type: "playlist" })'
+        );
     }
 
     function getCategoryTracks(category_id, params = {}) {
-        let query = CustomUrlFetchApp.parseQuery(params);
-        let url = `${API_BASE_URL}/browse/categories/${category_id}/playlists?${query}`;
-        return getTracks(SpotifyRequest.get(url).items);
+        throw new Error(
+            'DEPRECATED: Source.getCategoryTracks() is no longer available.\n' +
+            'Spotify removed /browse/categories endpoint in February 2026.\n' +
+            'Alternative: Use Source.getRecomTracks({ seed_genres: "' + category_id + '" })'
+        );
     }
 
     function getRelatedArtists(artists, isFlat = true) {
@@ -528,7 +532,118 @@ const Source = (function () {
     }
 
     function getArtistsTopTracks(artists, isFlat = true) {
-        return getArtistsByPath(artists, '/artists/%s/top-tracks?market=from_token', isFlat);
+        // MIGRATION: Spotify removed /artists/{id}/top-tracks endpoint Feb 2026
+        if (!artists || artists.length === 0) {
+            return isFlat ? [] : [];
+        }
+        
+        // Try Last.fm first if API key is configured
+        if (KeyValue.LASTFM_API_KEY) {
+            try {
+                return getArtistsTopTracksFromLastfm(artists, isFlat);
+            } catch (e) {
+                Admin.printInfo('Last.fm top tracks failed, using recommendations fallback');
+            }
+        }
+        
+        // Fallback to recommendations API
+        return getArtistsTopTracksFromRecommendations(artists, isFlat);
+    }
+
+    function getArtistsTopTracksFromLastfm(artists, isFlat = true) {
+        const LASTFM_API_BASE_URL = 'https://ws.audioscrobbler.com/2.0/?';
+        
+        let resultGroups = artists.map(artist => {
+            if (!artist || !artist.name) return [];
+            
+            let queryObj = {
+                method: 'artist.gettoptracks',
+                artist: artist.name,
+                limit: 20,
+                api_key: KeyValue.LASTFM_API_KEY,
+                format: 'json',
+                autocorrect: '1'
+            };
+            
+            let url = LASTFM_API_BASE_URL + CustomUrlFetchApp.parseQuery(queryObj);
+            let response;
+            try {
+                response = CustomUrlFetchApp.fetch(url);
+            } catch (e) {
+                return [];
+            }
+            
+            if (!response || !response.toptracks || !response.toptracks.track) return [];
+            
+            let lastfmTracks = response.toptracks.track;
+            if (!Array.isArray(lastfmTracks)) lastfmTracks = [lastfmTracks];
+            lastfmTracks = lastfmTracks.slice(0, 20);
+            
+            let searchItems = lastfmTracks.map(t => ({
+                name: t.name,
+                artist: { name: t.artist?.name || artist.name }
+            }));
+            
+            let spotifyTracks = Search.multisearchTracks(searchItems, item => 
+                `${item.artist.name} ${item.name}`
+            );
+            
+            return spotifyTracks.filter(track => {
+                if (!track || !track.artists) return false;
+                return track.artists.some(a => 
+                    a.id === artist.id || a.name.toLowerCase() === artist.name.toLowerCase()
+                );
+            });
+        });
+        
+        return isFlat ? resultGroups.flat(1) : resultGroups;
+    }
+
+    function getArtistsTopTracksFromRecommendations(artists, isFlat = true) {
+        let resultGroups = [];
+        let batchSize = 5;
+        
+        for (let i = 0; i < artists.length; i += batchSize) {
+            let batch = artists.slice(i, i + batchSize);
+            let seedIds = batch.filter(a => a && a.id).map(a => a.id).join(',');
+            
+            if (!seedIds) {
+                batch.forEach(() => resultGroups.push([]));
+                continue;
+            }
+            
+            let url = createUrlForRecomTracks({ seed_artists: seedIds, limit: 100 });
+            let response;
+            try {
+                response = SpotifyRequest.get(url);
+            } catch (e) {
+                batch.forEach(() => resultGroups.push([]));
+                continue;
+            }
+            
+            if (!response || !response.tracks) {
+                batch.forEach(() => resultGroups.push([]));
+                continue;
+            }
+            
+            let artistIdSet = new Set(batch.filter(a => a && a.id).map(a => a.id));
+            let tracksByArtist = {};
+            batch.forEach(a => { if (a && a.id) tracksByArtist[a.id] = []; });
+            
+            response.tracks.forEach(track => {
+                if (track && track.artists) {
+                    track.artists.forEach(a => {
+                        if (artistIdSet.has(a.id) && tracksByArtist[a.id].length < 10) {
+                            tracksByArtist[a.id].push(track);
+                        }
+                    });
+                }
+            });
+            
+            batch.forEach(a => resultGroups.push(a && a.id ? (tracksByArtist[a.id] || []) : []));
+        }
+        
+        return isFlat ? resultGroups.flat(1) : resultGroups;
     }
 
     function getArtistsByPath(artists, path, isFlat) {
@@ -543,7 +658,13 @@ const Source = (function () {
 
     function getRecomTracks(queryObj) {
         let url = createUrlForRecomTracks(queryObj);
-        return SpotifyRequest.get(url).tracks;
+        try {
+            let response = SpotifyRequest.get(url);
+            return response ? response.tracks : [];
+        } catch (e) {
+            Admin.printInfo('Recommendations unavailable - may require Extended Quota Mode');
+            return [];
+        }
     }
 
     function getRecomArtists(artists, queryObj = {}, isFlat = true) {
@@ -606,7 +727,12 @@ const Source = (function () {
             artists = artists.filter((item) => !excludeIds.includes(item.id));
         }
         artists = artists.filter((artist) => {
-            artist.followers = artist.followers.total || artist.followers;
+            // MIGRATION: followers removed Feb 2026
+            if (artist.followers && typeof artist.followers === 'object') {
+                artist.followers = artist.followers.total || 0;
+            } else if (artist.followers === undefined) {
+                artist.followers = 0;
+            }
             return (
                 RangeTracks.isBelong(artist, paramsArtist) &&
                 RangeTracks.isBelongGenres(artist.genres, paramsArtist.genres) &&
@@ -782,9 +908,17 @@ const Source = (function () {
         }
 
         function filterByFollowers() {
+            // MIGRATION: followers removed Feb 2026
+            Admin.printInfo('WARNING: Filtering by playlist followers may not work');
+
             for (let i = 0; i < result.length; i++) {
                 result[i] = getFullPlaylistObject(result[i]).filter((p) => {
-                    return isBelongRangeFollowers(p.followers.total);
+                    // Handle both old format (object) and undefined followers
+                    let followerCount = 0;
+                    if (p.followers) {
+                        followerCount = typeof p.followers === 'object' ? (p.followers.total || 0) : p.followers;
+                    }
+                    return isBelongRangeFollowers(followerCount);
                 });
             }
         }
@@ -914,10 +1048,22 @@ const Source = (function () {
         return getItemsByPlaylistId(playlist.id);
     }
 
+    function getPlaylistItemsContainer(playlistObj) {
+        if (!playlistObj) return null;
+        if (playlistObj.items && playlistObj.items.items) return playlistObj.items;
+        if (playlistObj.tracks && playlistObj.tracks.items) return playlistObj.tracks;
+        if (!playlistObj.items && !playlistObj.tracks) {
+            Admin.printInfo('Playlist items not available:', playlistObj.id);
+            return null;
+        }
+        return null;
+    }
+
     function getItemsByPlaylistObject(obj) {
         let items = [];
-        if (obj && obj.tracks && obj.tracks.items) {
-            items = obj.tracks.total <= 100 ? obj.tracks.items : SpotifyRequest.getItemsByNext(obj.tracks);
+        let container = getPlaylistItemsContainer(obj);
+        if (container) {
+            items = container.total <= 100 ? container.items : SpotifyRequest.getItemsByNext(container);
             items.forEach((item) => (item.origin = { id: obj.id, name: obj.name, type: obj.type }));
         }
         return items;
@@ -1378,45 +1524,42 @@ const RangeTracks = (function () {
 
 const Filter = (function () {
     function removeUnavailable(tracks, market) {
-        market = market || User.country;
-        let availableState = [];
+        // MIGRATION: available_markets removed Feb 2026, use is_playable field
+        // MIGRATION: linked_from removed Feb 2026
+        // MIGRATION: User.country removed Feb 2026, use USER_MARKET property
+        
+        if (!tracks || tracks.length === 0) return;
+        
+        market = market || UserProperties.getProperty('USER_MARKET') || 'from_token';
         let unavailableState = [];
-        let unclearState = [];
+        let trackIds = tracks.map(t => t.id);
+        
+        // Fetch tracks with market parameter to get is_playable field
+        let fullTracks = SpotifyRequest.getFullObjByIds('tracks', trackIds, 50, market);
+        
+        let trackMap = {};
+        fullTracks.forEach(t => {
+            if (t && t.id) trackMap[t.id] = t;
+        });
+        
+        tracks.forEach((track) => {
+            let fullTrack = trackMap[track.id];
+            if (!fullTrack) {
+                Admin.printInfo('Track not found in Spotify:', track.id);
+                unavailableState.push(track.id);
+            } else if (fullTrack.is_playable === true) {
+                // Track is available - no action needed
+            } else if (fullTrack.is_playable === false) {
+                unavailableState.push(track.id);
+                Admin.printInfo('Track not playable:', track.id, '-', getTrackKeys(track)[0]);
+            } else {
+                // is_playable is undefined - may be in Extended Quota Mode or market not specified
+                // Conservative approach: assume playable
+                Admin.printInfo('Could not determine playability for track:', track.id, '- assuming playable');
+            }
+        });
 
-        identifyState();
-        defineUnavailableState();
-        removeUnavailableTracks();
-
-        function identifyState() {
-            tracks.forEach((t) => {
-                if (t.hasOwnProperty('available_markets') && t.available_markets.includes(market)) {
-                    availableState.push(t.id);
-                } else {
-                    unclearState.push(t.id);
-                }
-            });
-        }
-
-        function defineUnavailableState() {
-            if (unclearState.length == 0) return;
-            SpotifyRequest.getFullObjByIds('tracks', unclearState, 50, market).forEach((t, i) => {
-                if (!t) {
-                    let id = unclearState[i];
-                    let track = tracks.find(t => t.id == id);
-                    Admin.printInfo(`У трека изменился id, старое значение ${id} (${getTrackKeys(track)})`);
-                    unavailableState.push(id);
-                } else if (t.hasOwnProperty('is_playable') && t.is_playable) {
-                    let id = t.linked_from ? t.linked_from.id : t.id;
-                    availableState.push(id);
-                } else {
-                    unavailableState.push(t.id);
-                    Admin.printInfo('Трек нельзя послушать:', t.id, '-', getTrackKeys(t)[0]);
-                }
-            });
-        }
-
-        function removeUnavailableTracks() {
-            if (availableState.length == tracks.length) return;
+        if (unavailableState.length > 0) {
             let availableTracks = tracks.filter((t) => !unavailableState.includes(t.id));
             Combiner.replace(tracks, availableTracks);
         }
@@ -1997,6 +2140,11 @@ const Order = (function () {
 
         function sortMeta() {
             // name, popularity, duration_ms, explicit, dates
+            // MIGRATION: popularity removed Feb 2026
+            if (_key == 'popularity') {
+                Admin.printInfo('WARNING: Sorting by popularity is no longer supported.');
+                return;
+            }
             let hasKey = _source.every((t) => t[_key] != undefined);
             if (!hasKey) {
                 let items = getCachedTracks(_source, { meta: {} }).meta;
@@ -2017,6 +2165,16 @@ const Order = (function () {
 
         function sortAlbum() {
             // popularity, name, release_date
+            // MIGRATION: popularity removed Feb 2026
+            if (_key == 'popularity') {
+                Admin.printInfo('WARNING: Sorting albums by popularity is no longer supported.');
+                return;
+            }
+
+            function extract(item) {
+                return item.album || item;
+            }
+
             let hasKey = _source.every((t) => extract(t)[_key] != undefined);
             let items = {};
             if (hasKey) {
@@ -2029,12 +2187,6 @@ const Order = (function () {
                 _source.sort((x, y) => compareString(items[extract(x).id], items[extract(y).id]));
             } else if (_key == 'release_date') {
                 _source.sort((x, y) => compareDate(items[extract(x).id], items[extract(y).id]));
-            } else if (_key == 'popularity') {
-                _source.sort((x, y) => compareNumber(items[extract(x).id], items[extract(y).id]));
-            }
-
-            function extract(item) {
-                return item.album || item;
             }
         }
 
@@ -2102,7 +2254,10 @@ const Order = (function () {
         }
 
         function getArtistId(item) {
-            return item.followers ? item.id : item.artists[0].id;
+            // MIGRATION: followers removed Feb 2026 - use type field instead
+            if (item.type === 'artist') return item.id;
+            if (item.artists && item.artists.length > 0) return item.artists[0].id;
+            return item.id;
         }
     }
 
@@ -2254,7 +2409,7 @@ const Playlist = (function () {
     function removeTracksRequest(id, tracks) {
         if (tracks.length > 0) {
             let params = {
-                url: `${API_BASE_URL}/playlists/${id}/tracks`,
+                url: `${API_BASE_URL}/playlists/${id}/items`,
                 key: 'tracks',
                 limit: 100,
                 items: getTrackUris(tracks, 'object'),
@@ -2267,7 +2422,7 @@ const Playlist = (function () {
         const SIZE = 100;
         let uris = getTrackUris(data.tracks);
         let count = Math.ceil(uris.length / SIZE);
-        let url = `${API_BASE_URL}/playlists/${data.id}/tracks`;
+        let url = `${API_BASE_URL}/playlists/${data.id}/items`;
         if (count == 0 && requestType == 'put') {
             // Удалить треки в плейлисте
             SpotifyRequest.put(url, { uris: [] });
@@ -2446,7 +2601,7 @@ const Library = (function () {
 })();
 
 const Lastfm = (function () {
-    const LASTFM_API_BASE_URL = 'http://ws.audioscrobbler.com/2.0/?';
+    const LASTFM_API_BASE_URL = 'https://ws.audioscrobbler.com/2.0/?';
     const LASTFM_STATION = 'https://www.last.fm/player/station/user';
     return {
         rangeTags, removeRecentTracks, removeRecentArtists, getLovedTracks, getRecentTracks, getLastfmRecentTracks, findNewPlayed, getTopTracks,
@@ -3088,9 +3243,10 @@ const Search = (function () {
         }
     }
 
+    // MIGRATION: Spotify February 2026 - Search limit reduced from 20 to 10
     function findBest(keywords, type) {
         let urls = keywords.map((keyword) => {
-            let queryObj = { q: keyword.slice(0, 100), type: type, limit: 20 };
+            let queryObj = { q: keyword.slice(0, 100), type: type, limit: 10 };  // Changed from 20
             return Utilities.formatString(TEMPLATE, CustomUrlFetchApp.parseQuery(queryObj));
         });
         return SpotifyRequest.getAll(urls).map((response, index) => {
@@ -3127,8 +3283,10 @@ const Search = (function () {
         return find(keywords, 'artist', requestCount);
     }
 
+    // MIGRATION: Spotify February 2026 - Search limit reduced from 50 to 10
+    // To get more results, increase requestCount parameter (uses pagination)
     function find(keywords, type, requestCount = 1) {
-        const limit = 50;
+        const limit = 10;  // Changed from 50 (Spotify API limit February 2026)
         let resultForKeyword = [];
         keywords.forEach((text) => {
             let result = [];
@@ -3209,9 +3367,22 @@ const getCachedTracks = (function () {
             fullAlbums.forEach((album, i) => isNull(album, uncachedTracks.albums[i], 'album') ? false : (cachedTracks.albums[album.id] = album));
         }
         if (uncachedTracks.features.length > 0) {
+            // MIGRATION: Spotify removed batch audio-features endpoint Feb 2026
+            // Note: Audio features may be unavailable in Development Mode
             // limit = 100, но UrlFetchApp.fetch выдает ошибку о превышении длины URL
             // При limit 85, длина URL для этого запроса 2001 символ
-            let features = SpotifyRequest.getFullObjByIds('audio-features', uncachedTracks.features, 85);
+            
+            let features;
+            try {
+                features = SpotifyRequest.getFullObjByIds('audio-features', uncachedTracks.features, 85);
+            } catch (e) {
+                Admin.printInfo('Audio features unavailable - may be in Development Mode');
+                uncachedTracks.features.forEach(id => {
+                    cachedTracks.features[id] = {};
+                });
+                return;
+            }
+            
             features.forEach((item, i) => {
                 if (item == null) {
                     let id = uncachedTracks.features[i];
@@ -3227,9 +3398,42 @@ const getCachedTracks = (function () {
         }
     }
 
-    // В объектах Track, Album, Artist Simplified нет ключа popularity
+    /**
+     * Determines if an object is a "simplified" version
+     * MIGRATION: popularity field removed Feb 2026 - now uses type-specific fields
+     * @param {Object} item - Track, Album, Artist, or AudioFeatures object
+     * @returns {boolean} - true if simplified, false if full object
+     */
     function isSimplified(item) {
-        return !item.popularity;
+        if (!item) return true;
+        
+        // Audio-features objects are never "simplified" in the Spotify sense
+        if (item.type === undefined && item.danceability !== undefined) {
+            return false;
+        }
+        
+        // Track: simplified tracks don't have album.id
+        if (item.type === 'track') {
+            return !item.album || !item.album.id;
+        }
+        
+        // Album: simplified albums don't have total_tracks
+        if (item.type === 'album') {
+            return item.total_tracks === undefined;
+        }
+        
+        // Artist: simplified artists don't have genres OR have undefined genres
+        if (item.type === 'artist') {
+            return !item.genres; // undefined or null means simplified
+        }
+        
+        // Playlist item: simplified items don't have added_at
+        if (item.added_at !== undefined && item.track) {
+            return false; // Full playlist item
+        }
+        
+        // Default: if no recognized type, assume full object
+        return false;
     }
 
     function isNull(item, sourceId, type) {
@@ -3388,15 +3592,15 @@ const SpotifyRequest = (function () {
     }
 
     function getFullObjByIds(objType, ids, limit, market) {
-        market = market ? `&market=${market}` : '';
-        let requestCount = Math.ceil(ids.length / limit);
-        let offset = limit;
-        let urls = [];
-        for (let i = 0; i < requestCount; i++) {
-            let strIds = ids.slice(i * limit, offset).join(',');
-            urls.push(`${API_BASE_URL}/${objType}/?ids=${strIds}${market}`);
-            offset += limit;
+        // Spotify removed batch endpoints in Feb 2026
+        // Migration: Use individual endpoints /tracks/{id}, /albums/{id}, /artists/{id}
+        // The 'limit' parameter is deprecated but kept for backward compatibility
+        if (!ids || ids.length === 0) {
+            return [];
         }
+        const marketParam = market ? `?market=${market}` : '';
+        const urls = ids.map(id => `${API_BASE_URL}/${objType}/${id}${marketParam}`);
+        // getAll() uses fetchAll() with built-in rate limiting (batches of 20)
         return getAll(urls).reduce((fullObj, response) => {
             response && Combiner.push(fullObj, response);
             return fullObj;
@@ -3508,10 +3712,18 @@ const SpotifyRequest = (function () {
 
 const User = (function () {
     !KeyValue['userId'] && setProfile();
+    
+    // MIGRATION: country removed from /me response Feb 2026
+    // Now uses USER_MARKET property with fallback
+    const DEFAULT_MARKET = 'US';
+    
     return {
         get id() { return KeyValue['userId'] },
-        get country() { return getUser().country },
+        get country() { 
+            return UserProperties.getProperty('USER_MARKET') || KeyValue.USER_MARKET || DEFAULT_MARKET;
+        },
         getUser,
+        getMarket: () => UserProperties.getProperty('USER_MARKET') || KeyValue.USER_MARKET || DEFAULT_MARKET,
     };
 
     function setProfile() {
@@ -3519,6 +3731,12 @@ const User = (function () {
         if (user) {
             KeyValue['userId'] = user.id;
             UserProperties.setProperty('userId', KeyValue['userId']);
+            
+            // MIGRATION: country no longer available from /me
+            // User must set USER_MARKET in config
+            if (!UserProperties.getProperty('USER_MARKET') && !KeyValue.USER_MARKET) {
+                Admin.printInfo('WARNING: USER_MARKET not set. Set it in config.js for proper market handling.');
+            }
         }
     }
 

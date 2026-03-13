@@ -1,9 +1,15 @@
 function setProperties() {
     // Описание параметров: chimildic.github.io/goofy/#/config
+    
+    // Spotify API credentials
     UserProperties.setProperty('CLIENT_ID', 'вашеЗначение');
     UserProperties.setProperty('CLIENT_SECRET', 'вашеЗначение');
     UserProperties.setProperty('PRIVATE_CLIENT_ID', 'вашеЗначение');
     UserProperties.setProperty('PRIVATE_CLIENT_SECRET', 'вашеЗначение');
+
+    // REQUIRED: User market (Spotify removed country from /me in Feb 2026)
+    // Set to your Spotify market code (e.g., 'US', 'GB', 'DE', 'RU')
+    UserProperties.setProperty('USER_MARKET', 'US');
 
     UserProperties.setProperty('LASTFM_API_KEY', 'вашеЗначение');
     UserProperties.setProperty('MUSIXMATCH_API_KEY', 'вашеЗначение');
