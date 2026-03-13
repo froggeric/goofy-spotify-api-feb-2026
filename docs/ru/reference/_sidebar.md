@@ -1,4 +1,4 @@
-- [На главную](/)
+- [Назад](/#/ru/)
 - [Список модулей](/reference/index.md)
   - [Cache](/reference/cache.md)
   - [Clerk](/reference/clerk.md)
@@ -13,5 +13,4 @@
   - [Search](/reference/search.md)
   - [Selector](/reference/selector.md)
   - [Source](/reference/source.md)
-- [Вспомогательное описание](/reference/desc.md)
-- <div style="display: flex; flex-direction: row; align-items: center; margin-top: 10px; justify-content: space-around;"><a target="_blank" href="https://t.me/forum_goofy"><img alt="Чат" src="https://img.shields.io/badge/Telegram-Чат-blue?logo=telegram&amp;logoColor=white"></a></div>
+- [Описание помощников](/reference/desc.md)

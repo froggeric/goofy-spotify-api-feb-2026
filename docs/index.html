@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
     <head>
         <meta charset="UTF-8" />
         <title>Goofy</title>
-        <meta name="description" content="Goofy - конструктор плейлистов для Spotify" />
+        <meta name="description" content="Goofy - Playlist builder for Spotify" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
         <link rel="stylesheet" href="./style/base-theme.css" />
         <link rel="stylesheet" href="./style/dark-theme.css" title="dark" />
@@ -13,12 +13,12 @@
         <link rel="icon" href="./img/favicon.svg" type="image/svg" />
     </head>
     <body>
-        <div id="app">Загрузка...</div>
+        <div id="app">Loading...</div>
         <script>
             window.$docsify = {
                 name: 'goofy',
                 repo: 'https://github.com/Chimildic/goofy',
-                homepage: 'overview.md',
+                homepage: 'en/overview.md',
                 loadNavbar: true,
                 loadSidebar: true,
                 subMaxLevel: 3,
@@ -27,14 +27,29 @@
                 search: {
                     maxAge: 86400000,
                     paths: 'auto',
-                    placeholder: 'Поиск',
-                    noData: 'Нет результатов',
+                    placeholder: {
+                        '/en/': 'Search',
+                        '/ru/': 'Поиск',
+                    },
+                    noData: {
+                        '/en/': 'No results',
+                        '/ru/': 'Нет результатов',
+                    },
                     depth: 3,
                 },
                 copyCode: {
-                    buttonText: 'Копировать',
-                    errorText: 'Ошибка',
-                    successText: 'Скопировано',
+                    buttonText: {
+                        '/en/': 'Copy',
+                        '/ru/': 'Копировать',
+                    },
+                    errorText: {
+                        '/en/': 'Error',
+                        '/ru/': 'Ошибка',
+                    },
+                    successText: {
+                        '/en/': 'Copied',
+                        '/ru/': 'Скопировано',
+                    },
                 },
                 darklightTheme: {
                     defaultTheme: 'dark',
@@ -57,9 +72,25 @@
                             return html + footer;
                         });
                     },
+                    // Language redirect plugin
+                    function (hook, vm) {
+                        hook.ready(function () {
+                            var path = vm.route.path;
+                            // Redirect root to English docs
+                            if (path === '/' || path === '') {
+                                window.location.hash = '#/en/';
+                            }
+                        });
+                    },
                 ],
                 alias: {
-                    '/func': '/reference/index.md',
+                    '/.*/_sidebar.md': '_sidebar.md',
+                    '/en/.*/_sidebar.md': 'en/_sidebar.md',
+                    '/ru/.*/_sidebar.md': 'ru/_sidebar.md',
+                    '/.*/_navbar.md': '_navbar.md',
+                    '/en/.*/_navbar.md': 'en/_navbar.md',
+                    '/ru/.*/_navbar.md': 'ru/_navbar.md',
+                    '/func': '/en/reference/index.md',
                 },
             };
         </script>
