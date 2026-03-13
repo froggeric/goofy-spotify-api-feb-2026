@@ -908,30 +908,25 @@ const Source = (function () {
         }
 
         function filterByFollowers() {
-            // MIGRATION: followers removed Feb 2026
-            Admin.printInfo('WARNING: Filtering by playlist followers may not work');
-
-            for (let i = 0; i < result.length; i++) {
-                result[i] = getFullPlaylistObject(result[i]).filter((p) => {
-                    // Handle both old format (object) and undefined followers
-                    let followerCount = 0;
-                    if (p.followers) {
-                        followerCount = typeof p.followers === 'object' ? (p.followers.total || 0) : p.followers;
-                    }
-                    return isBelongRangeFollowers(followerCount);
-                });
+            // MIGRATION: followers field removed Feb 2026 - filtering no longer possible
+            if (!filterByFollowers._warned) {
+                Admin.printInfo('WARNING: Filtering by playlist followers is no longer supported. Spotify removed this field in Feb 2026.');
+                Admin.printInfo('Your "followers" parameter is being ignored. Please remove it from your configuration.');
+                filterByFollowers._warned = true;
             }
+            // No API calls made - function is now a no-op
         }
 
         function filterPopularity(array) {
-            if (!params.hasOwnProperty('popularity')) {
-                return array;
+            if (!params.hasOwnProperty('popularity')) return array;
+            // MIGRATION: popularity field removed Feb 2026
+            // Show warning only once per playlist generation
+            if (!filterPopularity._warned) {
+                Admin.printError('ERROR: Filtering by popularity is no longer supported. Spotify removed this field in Feb 2026.');
+                Admin.printError('Your "popularity" parameter is being ignored. Please remove it from your configuration.');
+                filterPopularity._warned = true;
             }
-            if (array[0] && !array[0].hasOwnProperty('popularity')) {
-                let ids = array.map((t) => t.id);
-                array = SpotifyRequest.getFullObjByIds('tracks', ids, 50);
-            }
-            return array.filter((t) => t.popularity >= (params.popularity || 0));
+            return array;
         }
 
         function getFullPlaylistObject(array) {
